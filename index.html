@@ -321,8 +321,12 @@
     <div class="thresh-preview" id="threshPreview">⚠ Alerta abaixo de 100 TH/s por ≥5 min</div>
     <span class="field-hint">0 = alertar apenas quando para completamente</span>
   </div>
+  <div class="drawer-section">Telegram (alertas com app fechada)</div>
+  <div class="field"><label class="field-lbl">Bot Token</label><input type="text" class="field-in" id="cfgTgToken" placeholder="1234567890:AAF..."/><span class="field-hint">Obtém no @BotFather do Telegram</span></div>
+  <div class="field"><label class="field-lbl">Chat ID</label><input type="text" class="field-in" id="cfgTgChatId" placeholder="1641790813"/><span class="field-hint">Abre o bot e envia /start para obter</span></div>
   <button class="btn-save" onclick="saveConfig()">💾 Guardar e ligar</button>
-  <button class="btn-notif" onclick="reqNotif()">🔔 Activar notificações push</button>
+  <button class="btn-notif" onclick="testTelegram()">📱 Testar Telegram</button>
+  <button class="btn-notif" style="margin-top:8px" onclick="reqNotif()">🔔 Activar notificações push</button>
 </div>
 <nav class="bnav">
   <div class="bn on" id="bn-workers" onclick="goTab('workers',null,this)">
@@ -340,7 +344,7 @@
   </div>
 </nav>
 <script>
-let cfg={proxyUrl:'',apiKey:'',apiSecret:'',subaccount:'BTC_Thrust_Wallet',interval:60000,thresh:100,threshMin:5};
+let cfg={proxyUrl:'',apiKey:'',apiSecret:'',subaccount:'BTC_Thrust_Wallet',interval:60000,thresh:100,threshMin:5,tgToken:'',tgChatId:''};
 let workers=[],earnings=[],payments=[];
 let filt='ALL',pollTimer=null,maxHr=1,toastTimer=null;
 let alertLog=[],threshViolations={},prevStates={};
@@ -370,6 +374,8 @@ function populateDrawer(){
   document.getElementById('cfgInt').value=cfg.interval;
   document.getElementById('cfgThresh').value=cfg.thresh;
   document.getElementById('cfgThreshMin').value=cfg.threshMin;
+  document.getElementById('cfgTgToken').value=cfg.tgToken||'';
+  document.getElementById('cfgTgChatId').value=cfg.tgChatId||'';
 }
 
 function updateThreshPreview(){
@@ -387,6 +393,8 @@ function saveConfig(){
   cfg.interval=parseInt(document.getElementById('cfgInt').value);
   cfg.thresh=parseInt(document.getElementById('cfgThresh').value)||0;
   cfg.threshMin=parseInt(document.getElementById('cfgThreshMin').value)||5;
+  cfg.tgToken=document.getElementById('cfgTgToken').value.trim();
+  cfg.tgChatId=document.getElementById('cfgTgChatId').value.trim();
   localStorage.setItem('miningCfg',JSON.stringify(cfg));
   document.getElementById('subLabel').textContent=cfg.subaccount;
   document.getElementById('demoNotice').style.display=cfg.proxyUrl?'none':'block';
@@ -637,6 +645,7 @@ function checkNewPayment(){
   if(lastPaymentId&&latest!==lastPaymentId){
     addAlert('up',`Novo pagamento recebido: ₿ ${payments[0].amount}`,'');
     sendPush('💰 Pagamento recebido',`₿ ${payments[0].amount} BTC confirmado`);
+    sendTelegram(`💰 <b>Pagamento recebido!</b>\n₿ <b>${payments[0].amount} BTC</b>\n📅 ${payments[0].date}\n⏰ ${fmtDateTime(new Date())}`);
     showToast(`Pagamento recebido: ₿ ${payments[0].amount}`,'info');
   }
   lastPaymentId=latest;
@@ -647,15 +656,28 @@ function checkAlerts(){
   workers.forEach(w=>{
     const prev=prevStates[w.name]||{};
     const belowThresh=cfg.thresh>0&&w.status==='ONLINE'&&(w.hashrate||0)<cfg.thresh;
-    if(w.status==='DEAD'&&prev.status!=='DEAD'){addAlert('down',`Worker ${w.name} → DEAD (0 TH/s)`,w.name);sendPush('🔴 Worker DEAD',`Worker ${w.name} parou`);showToast(`Worker ${w.name} DEAD`,'danger');}
-    if(w.status==='OFFLINE'&&prev.status==='ONLINE'){addAlert('warn',`Worker ${w.name} → OFFLINE`,w.name);sendPush('⚠️ Worker Offline',`Worker ${w.name} offline`);showToast(`Worker ${w.name} offline`,'warn');}
-    if(w.status==='ONLINE'&&(prev.status==='DEAD'||prev.status==='OFFLINE')){addAlert('up',`Worker ${w.name} → recuperado (${(w.hashrate||0).toFixed(1)} TH/s)`,w.name);sendPush('✅ Worker online',`Worker ${w.name} voltou`);showToast(`Worker ${w.name} voltou online`,'info');delete threshViolations[w.name];}
+    if(w.status==='DEAD'&&prev.status!=='DEAD'){
+      addAlert('down',`Worker ${w.name} → DEAD (0 TH/s)`,w.name);
+      sendPush('🔴 Worker DEAD',`Worker ${w.name} parou`);
+      sendTelegram(`🔴 <b>Worker DEAD</b>\nWorker <b>${w.name}</b> parou de minerar!\n⏰ ${fmtDateTime(new Date())}\n📊 Subconta: ${cfg.subaccount}`);
+      showToast(`Worker ${w.name} DEAD`,'danger');}
+    if(w.status==='OFFLINE'&&prev.status==='ONLINE'){
+      addAlert('warn',`Worker ${w.name} → OFFLINE`,w.name);
+      sendPush('⚠️ Worker Offline',`Worker ${w.name} offline`);
+      sendTelegram(`⚠️ <b>Worker OFFLINE</b>\nWorker <b>${w.name}</b> ficou offline\n⏰ ${fmtDateTime(new Date())}`);
+      showToast(`Worker ${w.name} offline`,'warn');}
+    if(w.status==='ONLINE'&&(prev.status==='DEAD'||prev.status==='OFFLINE')){
+      addAlert('up',`Worker ${w.name} → recuperado (${(w.hashrate||0).toFixed(1)} TH/s)`,w.name);
+      sendPush('✅ Worker online',`Worker ${w.name} voltou`);
+      sendTelegram(`✅ <b>Worker recuperado</b>\nWorker <b>${w.name}</b> voltou online\n📈 Hashrate: ${(w.hashrate||0).toFixed(1)} TH/s\n⏰ ${fmtDateTime(new Date())}`);
+      showToast(`Worker ${w.name} voltou online`,'info');delete threshViolations[w.name];}
     if(belowThresh){
       if(!threshViolations[w.name])threshViolations[w.name]=now;
       else{const elapsed=(now-threshViolations[w.name])/60000;
         if(elapsed>=cfg.threshMin&&!prev.belowThreshAlerted){
           addAlert('warn',`Worker ${w.name} abaixo de ${cfg.thresh} TH/s há ${Math.round(elapsed)} min (actual: ${(w.hashrate||0).toFixed(1)} TH/s)`,w.name);
           sendPush('⚠️ Hashrate baixo',`Worker ${w.name}: ${(w.hashrate||0).toFixed(1)} TH/s`);
+          sendTelegram(`⚠️ <b>Hashrate baixo</b>\nWorker <b>${w.name}</b>: ${(w.hashrate||0).toFixed(1)} TH/s\nAbaixo de ${cfg.thresh} TH/s há ${Math.round(elapsed)} min\n⏰ ${fmtDateTime(new Date())}`);
           showToast(`Worker ${w.name}: hashrate baixo`,'warn');
           prevStates[w.name]={...prev,belowThreshAlerted:true};}}
     }else{delete threshViolations[w.name];if(prev.belowThreshAlerted)prevStates[w.name]={...prev,belowThreshAlerted:false};}
@@ -714,6 +736,23 @@ async function reqNotif(){
   if(p==='granted'){new Notification('Mining Monitor',{body:'✅ Notificações activadas!'});alert('✅ Notificações activadas!');}
   else alert('❌ Negado.\niPhone: Definições → Safari → Notificações → Permitir.');
 }
+async function sendTelegram(message){
+  if(!cfg.tgToken||!cfg.tgChatId||!cfg.proxyUrl)return;
+  try{
+    await fetch(`${cfg.proxyUrl}/alert`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({token:cfg.tgToken,chatId:cfg.tgChatId,message})
+    });
+  }catch(e){console.error('Telegram error:',e);}
+}
+
+async function testTelegram(){
+  if(!cfg.tgToken||!cfg.tgChatId){alert('Preenche o Token e Chat ID primeiro!');return;}
+  await sendTelegram('✅ <b>Mining Monitor</b>\nTelegram configurado com sucesso!\n\n⛏ Subconta: '+cfg.subaccount);
+  alert('Mensagem de teste enviada! Verifica o Telegram.');
+}
+
 function sendPush(title,body){if(Notification.permission==='granted')new Notification(title,{body,icon:'icon-192.png',requireInteraction:true,tag:'mining-alert',renotify:true});}
 
 function goTab(id,tabEl,navEl){
