@@ -142,7 +142,23 @@ async def get_payments(request: Request, subaccount: str = "", days: int = 90):
     result.sort(key=lambda x: x["date"], reverse=True)
     return result
 
-
+@app.get("/debug")
+async def debug(request: Request, subaccount: str = "BTC_Thrust_Wallet"):
+    key    = request.headers.get("x-api-key","")
+    secret = request.headers.get("x-api-secret","")
+    # Temporário: aceita via query params para testar no browser
+    key    = request.query_params.get("k", key)
+    secret = request.query_params.get("s", secret)
+    if not key or not secret:
+        raise HTTPException(status_code=401, detail="Pass ?k=APIKEY&s=SECRET")
+    headers = {"x-api-key": key, "x-api-secret": secret, "Accept": "application/json"}
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(
+            f"{BASE}/api/external/v1/workers",
+            params={"subaccountNames": subaccount, "size": 3},
+            headers=headers
+        )
+    return resp.json()
 @app.get("/health")
 async def health():
     return {"status": "ok", "ts": datetime.utcnow().isoformat()}
