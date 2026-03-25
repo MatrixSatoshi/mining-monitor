@@ -448,12 +448,14 @@ async function fetchPayments(){
   try{
     payments=await apiFetch(`/payments?subaccount=${enc(cfg.subaccount)}`);
     renderPayments();
-    // Check for new payment
     checkNewPayment();
   }catch(e){
-    document.getElementById('payList').innerHTML=`<div class="state"><span style="color:var(--danger)">${e.message}</span></div>`;
+    // Silent fail - don't show red banner
+    document.getElementById('payList').innerHTML=`<div class="state"><span style="color:var(--text3)">Pagamentos indisponíveis</span></div>`;
   }
 }
+
+function refreshAll(){fetchWorkers();}
 
 function recordHistory(){
   const now=new Date().toISOString();
