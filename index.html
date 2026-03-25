@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
   <meta name="apple-mobile-web-app-title" content="Mining"/>
   <meta name="theme-color" content="#07090d"/>
   <title>Mining Monitor</title>
@@ -167,8 +167,8 @@
     .spin{width:28px;height:28px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
     @keyframes spin{to{transform:rotate(360deg)}}
     /* TOAST */
-    .toast{position:fixed;top:calc(var(--safe-top) + 12px);left:50%;transform:translateX(-50%) translateY(-140%);width:calc(100% - 28px);max-width:400px;z-index:200;border-radius:14px;padding:13px 16px;font-family:var(--mono);font-size:12px;font-weight:500;display:flex;align-items:center;gap:10px;transition:transform .3s cubic-bezier(.34,1.56,.64,1);backdrop-filter:blur(20px);}
-    .toast.show{transform:translateX(-50%) translateY(0)}
+    .toast{position:fixed;top:calc(var(--safe-top) + 60px);left:50%;transform:translateX(-50%) translateY(-200%);opacity:0;width:calc(100% - 28px);max-width:400px;z-index:200;border-radius:14px;padding:13px 16px;font-family:var(--mono);font-size:12px;font-weight:500;display:flex;align-items:center;gap:10px;transition:transform .3s cubic-bezier(.34,1.56,.64,1);backdrop-filter:blur(20px);}
+    .toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
     .toast.danger{background:rgba(240,56,74,.92);color:#fff;border:1px solid rgba(255,100,115,.3);box-shadow:0 8px 40px rgba(240,56,74,.35)}
     .toast.warn{background:rgba(245,158,11,.92);color:#000;border:1px solid rgba(255,200,50,.3);box-shadow:0 8px 40px rgba(245,158,11,.35)}
     .toast.info{background:rgba(0,214,143,.92);color:#000;border:1px solid rgba(0,255,180,.3);box-shadow:0 8px 40px rgba(0,214,143,.35)}
@@ -356,6 +356,9 @@ function boot(){
   try{const s=localStorage.getItem('miningCfg');if(s)cfg={...cfg,...JSON.parse(s)};}catch(e){}
   try{const a=localStorage.getItem('miningAlerts');if(a)alertLog=JSON.parse(a);}catch(e){}
   try{const h=localStorage.getItem('miningHistory');if(h)hrHistory=JSON.parse(h);}catch(e){}
+  // Clear old alerts about worker 12 (no longer exists)
+  alertLog=alertLog.filter(a=>!a.msg.includes('12'));
+  try{localStorage.setItem('miningAlerts',JSON.stringify(alertLog));}catch(e){}
   populateDrawer();
   document.getElementById('subLabel').textContent=cfg.subaccount;
   if(!cfg.proxyUrl)document.getElementById('demoNotice').style.display='block';
@@ -462,6 +465,9 @@ function refreshAll(){fetchWorkers();}
 
 function recordHistory(){
   const now=new Date().toISOString();
+  const currNames=new Set(workers.map(w=>w.name));
+  // Clean up workers that no longer exist
+  Object.keys(hrHistory).forEach(n=>{if(!currNames.has(n))delete hrHistory[n];});
   workers.forEach(w=>{
     if(!hrHistory[w.name])hrHistory[w.name]=[];
     hrHistory[w.name].push({time:now,hashrate:w.hashrate||0,hashrateAvg:w.hashrateAvg||0});
