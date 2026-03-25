@@ -425,7 +425,10 @@ async function fetchWorkers(){
     workers=await apiFetch(`/workers?subaccount=${enc(cfg.subaccount)}`);
     recordHistory();
     renderWorkers();
-  }catch(e){showToast('Erro workers: '+e.message,'danger');}
+  }catch(e){
+    // Silent fail for workers too - just log
+    console.error('Workers error:',e.message);
+  }
 }
 
 async function fetchEarnings(){
@@ -689,8 +692,11 @@ function checkAlerts(){
   // Detect added/removed workers
   const prevNames=new Set(Object.keys(prevStates));
   const currNames=new Set(workers.map(w=>w.name));
-  workers.forEach(w=>{if(!prevNames.has(w.name)&&prevNames.size>0){addAlert('up',`Novo worker adicionado: Worker ${w.name}`,'');showToast(`Novo worker: ${w.name}`,'info');}});
-  prevNames.forEach(n=>{if(!currNames.has(n)&&workers.length>0){addAlert('down',`Worker ${n} removido da pool`,'');showToast(`Worker ${n} removido`,'warn');}});
+  // Only detect changes after first poll (prevNames not empty)
+  if(prevNames.size>0){
+    workers.forEach(w=>{if(!prevNames.has(w.name)){addAlert('up',`Novo worker adicionado: Worker ${w.name}`,'');sendTelegram(`➕ <b>Novo worker</b>\nWorker <b>${w.name}</b> adicionado\n⏰ ${fmtDateTime(new Date())}`);showToast(`Novo worker: ${w.name}`,'info');}});
+    prevNames.forEach(n=>{if(!currNames.has(n)){addAlert('down',`Worker ${n} removido da pool`,'');sendTelegram(`➖ <b>Worker removido</b>\nWorker <b>${n}</b> removido da pool\n⏰ ${fmtDateTime(new Date())}`);showToast(`Worker ${n} removido`,'warn');}});
+  }
 }
 
 function addAlert(type,msg,workerName=''){
@@ -734,10 +740,16 @@ function showToast(msg,type='danger'){
 function hideToast(){document.getElementById('toast').classList.remove('show');}
 
 async function reqNotif(){
-  if(!('Notification' in window)){alert('Browser não suporta notificações.');return;}
+  if(typeof Notification==='undefined'||!('Notification' in window)){
+    alert('Notificações push não suportadas neste browser.\nUsa o Telegram para alertas.');return;
+  }
   const p=await Notification.requestPermission();
-  if(p==='granted'){new Notification('Mining Monitor',{body:'✅ Notificações activadas!'});alert('✅ Notificações activadas!');}
-  else alert('❌ Negado.\niPhone: Definições → Safari → Notificações → Permitir.');
+  if(p==='granted'){
+    try{new Notification('Mining Monitor',{body:'✅ Notificações activadas!'});}catch(e){}
+    alert('✅ Notificações activadas!');
+  } else {
+    alert('❌ Negado.\niPhone: Definições → Safari → Notificações → Permitir.');
+  }
 }
 async function sendTelegram(message){
   if(!cfg.tgToken||!cfg.tgChatId)return;
@@ -762,7 +774,12 @@ async function testTelegram(){
   else alert('❌ Erro: '+d.description);
 }
 
-function sendPush(title,body){if(Notification.permission==='granted')new Notification(title,{body,icon:'icon-192.png',requireInteraction:true,tag:'mining-alert',renotify:true});}
+function sendPush(title,body){
+  try{
+    if(typeof Notification!=='undefined'&&Notification.permission==='granted')
+      new Notification(title,{body,icon:'icon-192.png',requireInteraction:true,tag:'mining-alert',renotify:true});
+  }catch(e){}
+}
 
 function goTab(id,tabEl,navEl){
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));
